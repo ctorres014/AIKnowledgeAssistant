@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "dotnet-backend-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/dotnet-contribution/skills/dotnet-backend-patterns/SKILL.md",
+      "computedHash": "624af9f8faea713dadaa51fc2f2040a4b365b4e083b9b9f82d7e9df1f627ea79"
+    },
+    "spec": {
+      "source": "Klerith/fernando-skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/spec/SKILL.md",
+      "computedHash": "986c4e34bcf2039e3563bb737d396e6248bdc694a0375bfb2e0ba26101667d27"
+    },
+    "spec-impl": {
+      "source": "Klerith/fernando-skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/spec-impl/SKILL.md",
+      "computedHash": "6cf65701d9cdb1b0b2619b416e601323ffbbcad3af405bc50b76b6e4390b547b"
+    }
+  }
+}
