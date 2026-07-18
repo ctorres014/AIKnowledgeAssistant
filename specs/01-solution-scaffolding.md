@@ -57,9 +57,9 @@ Response: 501 Not Implemented   // la lógica llega en SPEC 03
 2. Crear `AiKnowledgeAssistant.ServiceDefaults` (`dotnet new aspire-servicedefaults`). Verificación: compila.
 3. Crear `AiKnowledgeAssistant.AppHost` (`dotnet new aspire-apphost`). Verificación: `dotnet run` levanta el dashboard vacío de Aspire.
 4. Crear `Domain`, `Application`, `Infrastructure` como `classlib` con las referencias de capa (Domain sin deps; Application→Domain; Infrastructure→Application). Verificación: compila.
-5. Crear `AiKnowledgeAssistant.Api` (Web API minimal), referenciar `ServiceDefaults` + `Application` + `Infrastructure`; llamar `AddServiceDefaults()` y `MapDefaultEndpoints()` (health `/health`, `/alive`). Verificación: `GET /health` → 200.
+5. Crear `AiKnowledgeAssistant.Api` (ASP.NET Core Web API **basado en controladores**), referenciar `ServiceDefaults` + `Application` + `Infrastructure`; llamar `AddServiceDefaults()`, `AddControllers()`, `MapDefaultEndpoints()` (health `/health`, `/alive`) y `MapControllers()`. Verificación: `GET /health` → 200.
 6. En `AppHost`: `AddProject<Api>()`; añadir `AddPostgres(...).AddDatabase(...)`, `AddQdrant(...)` y `AddOllama(...)`; pasar `WithReference(...)` de los tres al proyecto `Api`. Verificación: dashboard muestra api + postgres + qdrant + ollama en `Running`.
-7. En `Api`: mapear `POST /api/query` que devuelve `Results.StatusCode(501)`. Verificación: `POST /api/query` → 501.
+7. En `Api`: implementar `POST /api/query` mediante un **controlador MVC** (`[ApiController]` con enrutado por atributos) que devuelve `StatusCode(501)`. Verificación: `POST /api/query` → 501.
 8. Añadir `Directory.Packages.props` (Central Package Management) y mover las versiones de paquete allí. Verificación: `dotnet build` sin warnings de versión.
 9. Crear `UnitTests` (xUnit + Moq) con un test de humo, e `IntegrationTests` (`WebApplicationFactory`) con dos tests: `GET /health` → 200 y `POST /api/query` → 501. Verificación: `dotnet test` pasa.
 10. Actualizar la sección "Build / test / run" de `CLAUDE.md` con los comandos reales (build, test, `dotnet run` desde AppHost). Verificación: comandos documentados coinciden con la solución.
@@ -82,7 +82,8 @@ Response: 501 Not Implemented   // la lógica llega en SPEC 03
 - **Sí:** namespace `AiKnowledgeAssistant` (sigue el nombre de la carpeta). **No:** `KnowledgeAssistant` / prefijo de compañía — descartados por preferencia del usuario.
 - **Sí:** cablear Postgres + Qdrant + Ollama ya, aunque ningún código los use. Base de infra completa desde el día 1. **No:** diferir Ollama — descartado porque el objetivo del primer hito es Ollama local.
 - **Sí:** stub `POST /api/query` → 501 para fijar la forma del contrato. **No:** solo health / `GET /ping` — descartados por no insinuar el contrato real de consulta.
-- **Sí:** .NET 9 + Aspire actual. **No:** .NET 8 LTS — descartado por ser greenfield sin restricción corporativa declarada.
+- **Sí:** los endpoints de la Api se implementan con **controladores MVC** (`[ApiController]` + enrutado por atributos), no con minimal API (preferencia del usuario, fijada en la implementación de SPEC 01). Los endpoints de salud de Aspire (`MapDefaultEndpoints` → `/health`, `/alive`) se mantienen tal cual por ser convención del framework.
+- **Sí:** .NET 10 + Aspire actual (revisado durante la implementación: el único SDK instalado es 10.0.301, así que se apunta a `net10.0` en lugar del `net9.0` originalmente previsto). **No:** .NET 8 LTS — descartado por ser greenfield sin restricción corporativa declarada.
 - **Sí:** Ollama como único proveedor objetivo del primer hito; la abstracción pluggable (keyed services OpenAI vs Ollama) se materializa en SPEC 03. **No:** cablear OpenAI ahora.
 - **Sí:** autenticación diferida a su propio spec; MVP funcional sin auth primero.
 - **Sí:** Central Package Management para versionado consistente con el skill `dotnet-backend-patterns`.
