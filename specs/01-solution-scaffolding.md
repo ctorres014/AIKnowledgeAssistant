@@ -82,7 +82,7 @@ Response: 501 Not Implemented   // la lógica llega en SPEC 03
 - **Sí:** namespace `AiKnowledgeAssistant` (sigue el nombre de la carpeta). **No:** `KnowledgeAssistant` / prefijo de compañía — descartados por preferencia del usuario.
 - **Sí:** cablear Postgres + Qdrant + Ollama ya, aunque ningún código los use. Base de infra completa desde el día 1. **No:** diferir Ollama — descartado porque el objetivo del primer hito es Ollama local.
 - **Sí:** stub `POST /api/query` → 501 para fijar la forma del contrato. **No:** solo health / `GET /ping` — descartados por no insinuar el contrato real de consulta.
-- **Sí:** .NET 9 + Aspire actual. **No:** .NET 8 LTS — descartado por ser greenfield sin restricción corporativa declarada.
+- **Sí:** .NET 10 + Aspire actual (revisado durante la implementación: el único SDK instalado es 10.0.301, así que se apunta a `net10.0` en lugar del `net9.0` originalmente previsto). **No:** .NET 8 LTS — descartado por ser greenfield sin restricción corporativa declarada.
 - **Sí:** Ollama como único proveedor objetivo del primer hito; la abstracción pluggable (keyed services OpenAI vs Ollama) se materializa en SPEC 03. **No:** cablear OpenAI ahora.
 - **Sí:** autenticación diferida a su propio spec; MVP funcional sin auth primero.
 - **Sí:** Central Package Management para versionado consistente con el skill `dotnet-backend-patterns`.
