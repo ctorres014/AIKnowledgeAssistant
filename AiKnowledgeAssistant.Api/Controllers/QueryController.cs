@@ -11,7 +11,7 @@ namespace AiKnowledgeAssistant.Api.Controllers;
 public sealed class QueryController : ControllerBase
 {
     // POST /api/query
-    [HttpPost]
+    [HttpPost(Name = "Query")]
     public IActionResult Post([FromBody] QueryRequest request)
         => StatusCode(StatusCodes.Status501NotImplemented);
 }
