@@ -1,6 +1,6 @@
 # SPEC 01 — Andamiaje de la solución .NET Aspire
 
-> **Status:** aprobado
+> **Status:** implementado
 > **Depends on:** — (ninguno)
 > **Date:** 2026-07-18
 > **Objective:** Crear el andamiaje ejecutable de la solución .NET Aspire con arquitectura limpia (Domain/Application/Infrastructure/Api), recursos Postgres/Qdrant/Ollama cableados y telemetría, sin lógica de negocio.

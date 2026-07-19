@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Greenfield / pre-implementation. No source code, build system, or git repo exists yet.
-The repository currently holds a product spec, a spec-driven workflow config, and a
-vendored .NET patterns skill. The first implementation work will scaffold the .NET
-Aspire solution described below.
+Scaffolded (SPEC 01 implemented). The runnable .NET Aspire solution exists with Clean
+Architecture layers, the Postgres/Qdrant/Ollama resources wired in the AppHost, telemetry
+via ServiceDefaults, and a `POST /api/query` stub returning 501 — **no business logic yet**.
+Ingestion (SPEC 02), the RAG pipeline / Knowledge Orchestrator (SPEC 03), the semantic
+cache (SPEC 04) and real persistence (SPEC 05) are still pending. See "Build / test / run".
 
 ## What this project is
 
@@ -69,8 +70,21 @@ by hand, so the lockfile hash stays consistent.
 
 ## Build / test / run
 
-No solution exists yet, so there are no project-specific commands. Once the .NET Aspire
-solution is scaffolded, the standard commands will be `dotnet build`, `dotnet test`
-(single test: `dotnet test --filter "FullyQualifiedName~<TestName>"`), and running the
-Aspire AppHost with `dotnet run` from the AppHost project. Update this section once the
-solution structure is in place.
+The .NET Aspire solution is scaffolded (SPEC 01). Targets **.NET 10** (`net10.0`,
+SDK 10.0.301) with **Aspire 13.4.6**; package versions are centralized in
+`Directory.Packages.props` (Central Package Management — do not add inline `Version=`
+to `.csproj` files).
+
+- **Build:** `dotnet build AiKnowledgeAssistant.sln`
+- **Test:** `dotnet test` (1 unit smoke test + 2 integration tests: `/health` 200,
+  `/api/query` 501). Single test: `dotnet test --filter "FullyQualifiedName~<TestName>"`.
+- **Run:** `dotnet run --project AiKnowledgeAssistant.AppHost` — starts the Aspire
+  dashboard and the `api`, `postgres`, `qdrant` and `ollama` resources. Requires a
+  container runtime (Docker/Podman) for Postgres/Qdrant/Ollama.
+
+Projects: `AiKnowledgeAssistant.{Domain,Application,Infrastructure,Api,AppHost,ServiceDefaults}`
+plus `AiKnowledgeAssistant.{UnitTests,IntegrationTests}`. Clean Architecture layering:
+`Domain` (no deps) → `Application` → `Infrastructure`; `Api` references `Application`,
+`Infrastructure` and `ServiceDefaults`. API endpoints are **MVC controllers**
+(`Controllers/*Controller.cs`), not minimal API. Health endpoints (`/health`, `/alive`)
+come from Aspire's `MapDefaultEndpoints` and are only mapped in the Development environment.
