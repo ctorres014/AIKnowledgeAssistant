@@ -1,7 +1,12 @@
+using AiKnowledgeAssistant.Infrastructure.DependencyInjection;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Aspire service defaults: OpenTelemetry, health checks, service discovery, HTTP resilience.
 builder.AddServiceDefaults();
+
+// Ingestion pipeline (SPEC 02): document sources, chunker, Ollama embeddings, Qdrant vector store.
+builder.AddIngestion();
 
 // Add services to the container.
 builder.Services.AddControllers();
