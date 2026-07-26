@@ -61,8 +61,15 @@ public sealed class IngestDocumentsHandler
 
         var documents = located.Value!;
 
+        using var batch = IngestionTelemetry.ActivitySource.StartActivity(IngestionTelemetry.BatchSpan);
+        batch?.SetTag("ingestion.path", command.Path);
+        batch?.SetTag("ingestion.source_type", command.SourceType ?? "inferred");
+        batch?.SetTag("ingestion.total_files", documents.Count);
+
         if (documents.Count > _options.MaxFilesPerRequest)
         {
+            batch?.SetStatus(ActivityStatusCode.Error, "TooManyFiles");
+
             // Rejected before touching the vector store: nothing is indexed for an oversized batch.
             return Result<IngestionSummary>.Failure(
                 $"TooManyFiles: {documents.Count} files exceed the limit of {_options.MaxFilesPerRequest} " +
@@ -121,6 +128,19 @@ public sealed class IngestDocumentsHandler
         var remaining = documents.Count - processed;
         var status = remaining > 0 ? IngestionStatus.PartiallyCompleted : IngestionStatus.Completed;
 
+        IngestionTelemetry.DocumentsIngested.Add(ingested);
+        IngestionTelemetry.DocumentsSkipped.Add(skipped);
+        IngestionTelemetry.DocumentsFailed.Add(failed.Count);
+        IngestionTelemetry.ChunksIndexed.Add(chunksIndexed);
+        IngestionTelemetry.BatchDuration.Record(stopwatch.Elapsed.TotalMilliseconds);
+
+        batch?.SetTag("ingestion.status", status.ToString());
+        batch?.SetTag("ingestion.ingested", ingested);
+        batch?.SetTag("ingestion.skipped", skipped);
+        batch?.SetTag("ingestion.failed", failed.Count);
+        batch?.SetTag("ingestion.remaining", remaining);
+        batch?.SetTag("ingestion.chunks_indexed", chunksIndexed);
+
         _logger.LogInformation(
             "Ingestion of {Path} finished {Status}: {Ingested}/{Total} ingested, {Chunks} chunks, " +
             "{Skipped} skipped, {Failed} failed, {Remaining} remaining",
@@ -141,13 +161,40 @@ public sealed class IngestDocumentsHandler
     /// <summary>Runs one document through the pipeline, converting any expected failure into an outcome.</summary>
     private async Task<DocumentOutcome> IngestOneAsync(LocatedDocument document, CancellationToken ct)
     {
-        var extracted = await document.Source.ExtractAsync(document.Path, ct);
-        if (!extracted.IsSuccess)
+        using var span = IngestionTelemetry.ActivitySource.StartActivity(IngestionTelemetry.DocumentSpan);
+        span?.SetTag("ingestion.file", document.Path);
+        span?.SetTag("ingestion.source_type", document.Source.SourceType.ToString());
+
+        var outcome = await RunPipelineAsync(document, ct);
+
+        span?.SetTag("ingestion.outcome", outcome.Kind.ToString());
+
+        if (outcome.Kind == DocumentOutcomeKind.Ingested)
         {
-            return DocumentOutcome.Failed(extracted.Error!);
+            span?.SetTag("ingestion.chunk_count", outcome.ChunkCount);
+        }
+        else if (outcome.Kind == DocumentOutcomeKind.Failed)
+        {
+            span?.SetStatus(ActivityStatusCode.Error, outcome.Reason);
         }
 
-        var raw = extracted.Value!;
+        return outcome;
+    }
+
+    /// <summary>The stages themselves, each one its own span.</summary>
+    private async Task<DocumentOutcome> RunPipelineAsync(LocatedDocument document, CancellationToken ct)
+    {
+        RawDocument raw;
+        using (IngestionTelemetry.ActivitySource.StartActivity(IngestionTelemetry.ExtractSpan))
+        {
+            var extracted = await document.Source.ExtractAsync(document.Path, ct);
+            if (!extracted.IsSuccess)
+            {
+                return DocumentOutcome.Failed(extracted.Error!);
+            }
+
+            raw = extracted.Value!;
+        }
 
         if (await _vectorStore.ExistsWithHashAsync(raw.SourceId, raw.ContentHash, ct))
         {
@@ -158,20 +205,38 @@ public sealed class IngestDocumentsHandler
         // New or changed: drop any previous version so a shrunk document leaves no orphan chunks.
         await _vectorStore.DeleteBySourceIdAsync(raw.SourceId, ct);
 
-        var chunks = _chunker.Chunk(raw);
+        IReadOnlyList<DocumentChunk> chunks;
+        using (var chunking = IngestionTelemetry.ActivitySource.StartActivity(IngestionTelemetry.ChunkSpan))
+        {
+            chunks = _chunker.Chunk(raw);
+            chunking?.SetTag("ingestion.chunk_count", chunks.Count);
+        }
+
         if (chunks.Count == 0)
         {
             return DocumentOutcome.Failed($"EmptyExtraction: {document.Path} produced no chunks.");
         }
 
-        var vectors = await _embeddings.GenerateAsync([.. chunks.Select(c => c.Text)], ct);
-        if (!vectors.IsSuccess)
+        IReadOnlyList<float[]> vectors;
+        using (var embedding = IngestionTelemetry.ActivitySource.StartActivity(IngestionTelemetry.EmbedSpan))
         {
-            return DocumentOutcome.Failed(vectors.Error!);
+            embedding?.SetTag("ingestion.chunk_count", chunks.Count);
+
+            var generated = await _embeddings.GenerateAsync([.. chunks.Select(c => c.Text)], ct);
+            if (!generated.IsSuccess)
+            {
+                embedding?.SetStatus(ActivityStatusCode.Error, generated.Error);
+                return DocumentOutcome.Failed(generated.Error!);
+            }
+
+            vectors = generated.Value!;
         }
 
-        await _vectorStore.UpsertAsync(
-            [.. chunks.Zip(vectors.Value!, (chunk, vector) => (chunk, vector))], ct);
+        using (IngestionTelemetry.ActivitySource.StartActivity(IngestionTelemetry.UpsertSpan))
+        {
+            await _vectorStore.UpsertAsync(
+                [.. chunks.Zip(vectors, (chunk, vector) => (chunk, vector))], ct);
+        }
 
         return DocumentOutcome.Ingested(chunks.Count);
     }

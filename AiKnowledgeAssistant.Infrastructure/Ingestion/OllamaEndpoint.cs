@@ -6,22 +6,30 @@ namespace AiKnowledgeAssistant.Infrastructure.Ingestion;
 /// Resolves the Ollama base address from configuration.
 /// </summary>
 /// <remarks>
-/// Aspire injects <c>ConnectionStrings:ollama</c> for the referenced resource, either as a bare URL
-/// or in <c>Endpoint=http://host:port</c> form. When nothing is configured we fall back to the
-/// service-discovery name, which the ServiceDefaults handler resolves inside the Aspire app host.
+/// Aspire injects a connection string per referenced resource, either as a bare URL or in
+/// <c>Endpoint=http://host:port;Model=...</c> form. The embedding <em>model</em> resource is
+/// preferred over the bare server, so the client points at whatever the app host actually pulled;
+/// with neither configured we fall back to the service-discovery name, which the ServiceDefaults
+/// handler resolves inside the app host.
 /// </remarks>
 public static class OllamaEndpoint
 {
-    /// <summary>Connection / service name of the Ollama resource in the app host.</summary>
+    /// <summary>Connection name of the embedding model resource in the app host.</summary>
+    public const string ModelResourceName = "embedding";
+
+    /// <summary>Connection / service name of the Ollama server resource in the app host.</summary>
     public const string ResourceName = "ollama";
 
     private const string Fallback = "http://ollama";
 
     public static Uri Resolve(IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(ResourceName);
+        var endpoint =
+            Parse(configuration.GetConnectionString(ModelResourceName)) ??
+            Parse(configuration.GetConnectionString(ResourceName)) ??
+            Fallback;
 
-        return new Uri(Parse(connectionString) ?? Fallback);
+        return new Uri(endpoint);
     }
 
     private static string? Parse(string? connectionString)

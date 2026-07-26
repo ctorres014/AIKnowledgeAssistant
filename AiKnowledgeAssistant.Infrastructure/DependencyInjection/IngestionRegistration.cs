@@ -4,6 +4,8 @@ using AiKnowledgeAssistant.Infrastructure.Ingestion;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 namespace AiKnowledgeAssistant.Infrastructure.DependencyInjection;
 
@@ -26,7 +28,22 @@ public static class IngestionRegistration
         builder.Services.AddSingleton<ITextChunker, FixedWindowTextChunker>();
         builder.Services.AddScoped<IngestDocumentsHandler>();
 
+        AddTelemetry(builder.Services);
+
         return builder;
+    }
+
+    /// <summary>
+    /// Surfaces the pipeline's spans and counters through the Aspire dashboard. ServiceDefaults sets
+    /// up the providers and exporters; this only opts our own source and meter in.
+    /// </summary>
+    private static void AddTelemetry(IServiceCollection services)
+    {
+        services.ConfigureOpenTelemetryTracerProvider(
+            tracing => tracing.AddSource(IngestionTelemetry.ActivitySourceName));
+
+        services.ConfigureOpenTelemetryMeterProvider(
+            metrics => metrics.AddMeter(IngestionTelemetry.MeterName));
     }
 
     private static void AddOptions(IHostApplicationBuilder builder)
