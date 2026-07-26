@@ -20,6 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Same sample corpus the unit tests use, linked rather than duplicated. -->
+    <Content Include="..\AiKnowledgeAssistant.UnitTests\Samples\**\*"
+             LinkBase="Samples"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
