@@ -18,7 +18,13 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    // OpenAPI document at /openapi/v1.json, browsable through Swagger UI at /swagger.
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "AI Knowledge Assistant v1");
+        options.DocumentTitle = "AI Knowledge Assistant API";
+    });
 }
 
 app.UseHttpsRedirection();

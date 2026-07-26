@@ -13,4 +13,11 @@ public sealed class EmbeddingOptions
 
     /// <summary>Chunks sent per embedding request, to avoid one HTTP call per chunk.</summary>
     public int BatchSize { get; init; } = 16;
+
+    /// <summary>
+    /// Budget for a single embedding request. Embedding a batch on CPU takes tens of seconds, well
+    /// past the 10s the standard resilience handler allows by default, so this raises the per-attempt
+    /// timeout of the Ollama client. Keep it above the slowest observed batch.
+    /// </summary>
+    public int RequestTimeoutSeconds { get; init; } = 120;
 }

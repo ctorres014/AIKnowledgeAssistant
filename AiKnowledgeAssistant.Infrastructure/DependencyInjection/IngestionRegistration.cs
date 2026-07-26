@@ -87,16 +87,46 @@ public static class IngestionRegistration
     /// Ollama as a typed <see cref="HttpClient"/>, exposed both keyed (<c>"ollama"</c>) and as the
     /// default provider. OpenAI would slot in here as a second key without touching callers.
     /// </summary>
+    /// <remarks>
+    /// ServiceDefaults applies <c>AddStandardResilienceHandler</c> to every client, whose defaults
+    /// (10s per attempt, 30s in total) are far too tight for CPU embedding: a batch that simply takes
+    /// 15s gets cut, retried three times and reported as <c>EmbeddingRequestFailed</c>. This client
+    /// drops that default handler and installs one sized for the workload.
+    /// </remarks>
     private static void AddEmbeddings(IHostApplicationBuilder builder)
     {
+        var attemptTimeout = TimeSpan.FromSeconds(Math.Max(
+            1,
+            builder.Configuration.GetValue(
+                $"{EmbeddingOptions.SectionName}:{nameof(EmbeddingOptions.RequestTimeoutSeconds)}",
+                new EmbeddingOptions().RequestTimeoutSeconds)));
+
+        // EXTEXP0001: RemoveAllResilienceHandlers below is experimental. It is the only way to opt a
+        // single client out of the ServiceDefaults default, and the alternative — stacking a second
+        // handler — would compound both timeouts.
+#pragma warning disable EXTEXP0001
         builder.Services
             .AddHttpClient<OllamaEmbeddingGenerator>(client =>
             {
                 client.BaseAddress = OllamaEndpoint.Resolve(builder.Configuration);
 
-                // Embedding a batch on CPU can be slow; the ingest deadline is the real bound.
-                client.Timeout = TimeSpan.FromMinutes(5);
+                // Outermost bound; the resilience pipeline below cuts in well before this.
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .RemoveAllResilienceHandlers()
+            .AddStandardResilienceHandler(options =>
+            {
+                options.AttemptTimeout.Timeout = attemptTimeout;
+
+                // One retry only: a slow batch is slow again on the second try, and the value here is
+                // covering the window where Ollama is still loading the model.
+                options.Retry.MaxRetryAttempts = 1;
+                options.TotalRequestTimeout.Timeout = attemptTimeout * 2;
+
+                // Validation requires at least twice the attempt timeout.
+                options.CircuitBreaker.SamplingDuration = attemptTimeout * 2;
             });
+#pragma warning restore EXTEXP0001
 
         builder.Services.AddTransient<IEmbeddingGenerator>(
             sp => sp.GetRequiredService<OllamaEmbeddingGenerator>());
