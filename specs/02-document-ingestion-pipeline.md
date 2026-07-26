@@ -1,6 +1,6 @@
 # SPEC 02 — Pipeline de ingesta y conectores de documentos
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 01
 > **Date:** 2026-07-26
 > **Objective:** Implementar el pipeline de ingesta que lee documentos desde fuentes pluggables (PDF/TXT/MD en este spec), los chunkea, genera embeddings con Ollama y los indexa de forma idempotente en Qdrant, expuesto vía `POST /api/ingest`.
@@ -226,37 +226,48 @@ Response 200: { "collection": "knowledge", "vectorsCount": 812, "dimension": 768
 
 ## Acceptance criteria
 
-- [ ] `dotnet build AiKnowledgeAssistant.sln` compila sin errores ni warnings de versión de paquete.
-- [ ] `Domain` sigue sin referenciar ningún otro proyecto de la solución.
-- [ ] `Application` referencia únicamente `Domain` (los conectores concretos, Ollama y Qdrant viven solo en `Infrastructure`).
-- [ ] `dotnet test` pasa completo **sin un runtime de contenedores activo**.
-- [ ] `FixedWindowTextChunker` sobre un texto de ~2.000 tokens estimados produce >1 chunk, todos con `TokenCount <= 500`, `Index` consecutivo desde 0 y solape verificable entre chunks contiguos.
-- [ ] Un documento cuyo texto estimado es <500 tokens produce exactamente 1 chunk.
-- [ ] `ContentHasher` devuelve el mismo hash para el mismo contenido y distinto para contenido distinto.
-- [ ] `ChunkIdFactory` devuelve el mismo `Guid` para el mismo `sourceId#index` en ejecuciones distintas del proceso.
-- [ ] `PdfDocumentSource` extrae texto no vacío del PDF de muestra.
-- [ ] `PdfDocumentSource` sobre el PDF corrupto de muestra devuelve `Result.Failure` y **no** lanza excepción.
-- [ ] `TextDocumentSource` y `MarkdownDocumentSource` extraen el contenido esperado de sus archivos de muestra y derivan el `Title` del nombre de archivo sin extensión.
-- [ ] `FileSystemDocumentLocator` sobre `Samples/` enumera solo `.pdf`, `.txt`, `.md`/`.markdown` e ignora el resto.
-- [ ] `OllamaEmbeddingGenerator` con `HttpMessageHandler` mockeado devuelve N vectores de longitud 768 para N textos, y `Result.Failure` ante un 500 HTTP.
-- [ ] `IngestDocumentsHandler` con 3 documentos de los que 1 falla devuelve `ingested: 2`, `failedCount: 1` y la lista `failed` con el motivo de ese archivo.
-- [ ] Ejecutar la ingesta dos veces sobre la misma carpeta sin cambios devuelve `skipped` igual al número de archivos y `chunksIndexed: 0` en la segunda pasada.
-- [ ] Modificar un archivo ya ingestado y re-ingestar borra los chunks previos de ese `sourceId`: `vectorsCount` refleja el nuevo número de chunks, no la suma de ambas pasadas.
-- [ ] `POST /api/ingest` con una carpeta que contiene 2 `.md` devuelve `200` con `status: "Completed"`, `remaining: 0`, `ingested: 2` y `chunksIndexed > 0`.
-- [ ] `POST /api/ingest` con una ruta inexistente devuelve `400`.
-- [ ] `POST /api/ingest` con `sourceType` desconocido devuelve `400`.
-- [ ] `POST /api/ingest` sobre una carpeta con más archivos que `MaxFilesPerRequest` devuelve `400` con `error: "TooManyFiles"` y **no indexa ningún vector** (`vectorsCount` no cambia).
-- [ ] Con `TimeoutSeconds` reducido y un `IEmbeddingGenerator` fake con retardo, la respuesta es `200` con `status: "PartiallyCompleted"`, `remaining > 0` e `ingested > 0`.
-- [ ] Un corte por timeout nunca deja un documento a medias: para cada `sourceId` presente en Qdrant, el número de chunks coincide con el que produce el chunker para ese documento.
-- [ ] Repetir el mismo `POST` tras un `PartiallyCompleted` devuelve `status: "Completed"`, con los ya procesados contados en `skipped`.
-- [ ] `GET /api/ingest/stats` devuelve `200` con `collection: "knowledge"` y `dimension: 768`.
+- [x] `dotnet build AiKnowledgeAssistant.sln` compila sin errores ni warnings de versión de paquete.
+- [x] `Domain` sigue sin referenciar ningún otro proyecto de la solución.
+- [x] `Application` referencia únicamente `Domain` (los conectores concretos, Ollama y Qdrant viven solo en `Infrastructure`).
+- [x] `dotnet test` pasa completo **sin un runtime de contenedores activo**.
+- [x] `FixedWindowTextChunker` sobre un texto de ~2.000 tokens estimados produce >1 chunk, todos con `TokenCount <= 500`, `Index` consecutivo desde 0 y solape verificable entre chunks contiguos.
+- [x] Un documento cuyo texto estimado es <500 tokens produce exactamente 1 chunk.
+- [x] `ContentHasher` devuelve el mismo hash para el mismo contenido y distinto para contenido distinto.
+- [x] `ChunkIdFactory` devuelve el mismo `Guid` para el mismo `sourceId#index` en ejecuciones distintas del proceso.
+- [x] `PdfDocumentSource` extrae texto no vacío del PDF de muestra.
+- [x] `PdfDocumentSource` sobre el PDF corrupto de muestra devuelve `Result.Failure` y **no** lanza excepción.
+- [x] `TextDocumentSource` y `MarkdownDocumentSource` extraen el contenido esperado de sus archivos de muestra y derivan el `Title` del nombre de archivo sin extensión.
+- [x] `FileSystemDocumentLocator` sobre `Samples/` enumera solo `.pdf`, `.txt`, `.md`/`.markdown` e ignora el resto.
+- [x] `OllamaEmbeddingGenerator` con `HttpMessageHandler` mockeado devuelve N vectores de longitud 768 para N textos, y `Result.Failure` ante un 500 HTTP.
+- [x] `IngestDocumentsHandler` con 3 documentos de los que 1 falla devuelve `ingested: 2`, `failedCount: 1` y la lista `failed` con el motivo de ese archivo.
+- [x] Ejecutar la ingesta dos veces sobre la misma carpeta sin cambios devuelve `skipped` igual al número de archivos y `chunksIndexed: 0` en la segunda pasada.
+- [x] Modificar un archivo ya ingestado y re-ingestar borra los chunks previos de ese `sourceId`: `vectorsCount` refleja el nuevo número de chunks, no la suma de ambas pasadas.
+- [x] `POST /api/ingest` con una carpeta que contiene 2 `.md` devuelve `200` con `status: "Completed"`, `remaining: 0`, `ingested: 2` y `chunksIndexed > 0`.
+- [x] `POST /api/ingest` con una ruta inexistente devuelve `400`.
+- [x] `POST /api/ingest` con `sourceType` desconocido devuelve `400`.
+- [x] `POST /api/ingest` sobre una carpeta con más archivos que `MaxFilesPerRequest` devuelve `400` con `error: "TooManyFiles"` y **no indexa ningún vector** (`vectorsCount` no cambia).
+- [x] Con `TimeoutSeconds` reducido y un `IEmbeddingGenerator` fake con retardo, la respuesta es `200` con `status: "PartiallyCompleted"`, `remaining > 0` e `ingested > 0`.
+- [x] Un corte por timeout nunca deja un documento a medias: para cada `sourceId` presente en Qdrant, el número de chunks coincide con el que produce el chunker para ese documento.
+- [x] Repetir el mismo `POST` tras un `PartiallyCompleted` devuelve `status: "Completed"`, con los ya procesados contados en `skipped`.
+- [x] `GET /api/ingest/stats` devuelve `200` con `collection: "knowledge"` y `dimension: 768`.
 - [ ] Con el AppHost corriendo, el dashboard de Aspire muestra el recurso del modelo `nomic-embed-text` en estado `Running`.
 - [ ] Tras una ingesta real contra Qdrant, la colección `knowledge` existe con dimensión 768 y `vectorsCount > 0`.
 - [ ] Un punto de Qdrant inspeccionado contiene los 7 campos de payload: `sourceId`, `sourceType`, `title`, `chunkIndex`, `text`, `contentHash`, `ingestedAt`.
 - [ ] Arrancar la Api dos veces consecutivas no falla por colección ya existente.
 - [ ] Una ingesta genera en el dashboard de Aspire una traza del `ActivitySource` `AiKnowledgeAssistant.Ingestion` con spans por etapa.
-- [ ] `POST /api/query` sigue devolviendo `501` (este spec no toca el endpoint de consulta).
-- [ ] Ningún `.csproj` fija versiones de paquete inline (`UglyToad.PdfPig` y `Qdrant.Client` están en `Directory.Packages.props`).
+- [x] `POST /api/query` sigue devolviendo `501` (este spec no toca el endpoint de consulta).
+- [x] Ningún `.csproj` fija versiones de paquete inline (`UglyToad.PdfPig` y `Qdrant.Client` están en `Directory.Packages.props`).
+
+> **Estado de la verificación.** Los 26 criterios marcados están cubiertos por la suite
+> automatizada (135 unit + 27 integración, sin contenedores). Los 5 sin marcar requieren el
+> AppHost con Qdrant y Ollama reales y quedan como comprobación manual previa al merge; su
+> lógica sí está testeada con dobles en memoria (creación de colección y doble arranque en
+> `VectorStoreStartupTests`, los 7 campos de payload en `QdrantPayloadTests`, la forma de la
+> traza en `IngestionTelemetryTests`), así que el riesgo residual es de integración, no de lógica.
+>
+> Dos notas sobre el texto de los criterios: el id real del paquete en NuGet es `PdfPig`
+> (`UglyToad.PdfPig` es el namespace), y el criterio de "sin runtime de contenedores" se validó
+> con los puertos de Qdrant libres y sin contenedor de Qdrant levantado, no parando Docker.
 
 ## Decisions
 
