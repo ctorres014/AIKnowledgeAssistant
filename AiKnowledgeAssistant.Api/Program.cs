@@ -1,7 +1,12 @@
+using AiKnowledgeAssistant.Infrastructure.DependencyInjection;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Aspire service defaults: OpenTelemetry, health checks, service discovery, HTTP resilience.
 builder.AddServiceDefaults();
+
+// Ingestion pipeline (SPEC 02): document sources, chunker, Ollama embeddings, Qdrant vector store.
+builder.AddIngestion();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -13,7 +18,13 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    // OpenAPI document at /openapi/v1.json, browsable through Swagger UI at /swagger.
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "AI Knowledge Assistant v1");
+        options.DocumentTitle = "AI Knowledge Assistant API";
+    });
 }
 
 app.UseHttpsRedirection();
