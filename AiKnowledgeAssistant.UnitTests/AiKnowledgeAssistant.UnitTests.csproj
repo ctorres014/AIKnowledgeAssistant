@@ -18,6 +18,12 @@
   <ItemGroup>
     <ProjectReference Include="..\AiKnowledgeAssistant.Application\AiKnowledgeAssistant.Application.csproj" />
     <ProjectReference Include="..\AiKnowledgeAssistant.Domain\AiKnowledgeAssistant.Domain.csproj" />
+    <ProjectReference Include="..\AiKnowledgeAssistant.Infrastructure\AiKnowledgeAssistant.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Versioned sample corpus: extractor and locator tests run against real files. -->
+    <Content Include="Samples\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
