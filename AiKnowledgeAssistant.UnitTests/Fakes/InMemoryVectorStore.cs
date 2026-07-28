@@ -1,5 +1,7 @@
 using AiKnowledgeAssistant.Application.Abstractions;
+using AiKnowledgeAssistant.Domain.Common;
 using AiKnowledgeAssistant.Domain.Ingestion;
+using AiKnowledgeAssistant.Domain.Rag;
 
 namespace AiKnowledgeAssistant.UnitTests.Fakes;
 
@@ -26,6 +28,14 @@ public sealed class InMemoryVectorStore : IVectorStore
     public int DeleteCalls { get; private set; }
 
     public int UpsertCalls { get; private set; }
+
+    public int SearchCalls { get; private set; }
+
+    /// <summary>Arguments of the last <see cref="SearchAsync"/> call, for asserting what the pipeline asked for.</summary>
+    public (float[] Vector, int TopK, float MinScore)? LastSearch { get; private set; }
+
+    /// <summary>Set to fail every search, simulating a store outage during a query.</summary>
+    public bool FailSearch { get; init; }
 
     public IReadOnlyCollection<(DocumentChunk Chunk, float[] Vector)> Points => _points.Values;
 
@@ -84,4 +94,35 @@ public sealed class InMemoryVectorStore : IVectorStore
 
     public Task<VectorStoreStats> GetStatsAsync(CancellationToken ct) =>
         Task.FromResult(new VectorStoreStats(Collection, _points.Count, Dimension));
+
+    /// <summary>Real cosine similarity over the stored vectors, filtered and truncated like Qdrant does.</summary>
+    public Task<Result<IReadOnlyList<RetrievedChunk>>> SearchAsync(
+        float[] queryVector, int topK, float minScore, CancellationToken ct)
+    {
+        SearchCalls++;
+        LastSearch = (queryVector, topK, minScore);
+
+        if (FailSearch)
+        {
+            return Task.FromResult(Result<IReadOnlyList<RetrievedChunk>>.Failure(
+                "VectorSearchFailed: vector store unavailable.", "VectorSearchFailed"));
+        }
+
+        IReadOnlyList<RetrievedChunk> hits =
+        [
+            .. _points.Values
+                .Select(p => new RetrievedChunk(
+                    p.Chunk.SourceId,
+                    p.Chunk.SourceType,
+                    p.Chunk.Title,
+                    p.Chunk.Index,
+                    p.Chunk.Text,
+                    VectorMath.CosineSimilarity(queryVector, p.Vector)))
+                .Where(c => c.Score >= minScore)
+                .OrderByDescending(c => c.Score)
+                .Take(topK)
+        ];
+
+        return Task.FromResult(Result<IReadOnlyList<RetrievedChunk>>.Success(hits));
+    }
 }

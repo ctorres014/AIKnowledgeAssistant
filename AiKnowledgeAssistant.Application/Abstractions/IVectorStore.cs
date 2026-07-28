@@ -1,4 +1,6 @@
+using AiKnowledgeAssistant.Domain.Common;
 using AiKnowledgeAssistant.Domain.Ingestion;
+using AiKnowledgeAssistant.Domain.Rag;
 
 namespace AiKnowledgeAssistant.Application.Abstractions;
 
@@ -26,6 +28,18 @@ public interface IVectorStore
 
     /// <summary>Collection name, vector count and dimension, as surfaced by <c>GET /api/ingest/stats</c>.</summary>
     Task<VectorStoreStats> GetStatsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Nearest neighbours of a query vector: at most <paramref name="topK"/> chunks, none scoring
+    /// below <paramref name="minScore"/>.
+    /// </summary>
+    /// <remarks>
+    /// Alone among the members here this returns <c>Result</c> instead of letting exceptions surface.
+    /// A store outage during ingestion is a background failure, but during a query it is an expected
+    /// one that has to reach the caller as <c>503 VectorSearchFailed</c> rather than an opaque 500.
+    /// </remarks>
+    Task<Result<IReadOnlyList<RetrievedChunk>>> SearchAsync(
+        float[] queryVector, int topK, float minScore, CancellationToken ct);
 }
 
 /// <summary>Snapshot of the vector collection.</summary>

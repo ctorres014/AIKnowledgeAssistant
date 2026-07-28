@@ -1,6 +1,8 @@
 using AiKnowledgeAssistant.Application.Abstractions;
 using AiKnowledgeAssistant.Application.Ingestion;
+using AiKnowledgeAssistant.Domain.Common;
 using AiKnowledgeAssistant.Domain.Ingestion;
+using AiKnowledgeAssistant.Domain.Rag;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Qdrant.Client;
@@ -14,7 +16,7 @@ namespace AiKnowledgeAssistant.Infrastructure.Ingestion;
 /// </summary>
 public sealed class QdrantVectorStore : IVectorStore
 {
-    private readonly QdrantClient _client;
+    private readonly IQdrantClient _client;
     private readonly ILogger<QdrantVectorStore> _logger;
     private readonly TimeProvider _time;
     private readonly string _collection;
@@ -22,7 +24,7 @@ public sealed class QdrantVectorStore : IVectorStore
     private readonly int _dimension;
 
     public QdrantVectorStore(
-        QdrantClient client,
+        IQdrantClient client,
         IOptions<VectorStoreOptions> vectorStoreOptions,
         IOptions<EmbeddingOptions> embeddingOptions,
         ILogger<QdrantVectorStore> logger,
@@ -100,6 +102,36 @@ public sealed class QdrantVectorStore : IVectorStore
         var info = await _client.GetCollectionInfoAsync(_collection, ct);
 
         return new VectorStoreStats(_collection, (long)info.PointsCount, ReadDimension(info) ?? _dimension);
+    }
+
+    public async Task<Result<IReadOnlyList<RetrievedChunk>>> SearchAsync(
+        float[] queryVector, int topK, float minScore, CancellationToken ct)
+    {
+        try
+        {
+            // scoreThreshold is applied by Qdrant itself, so noisy hits never travel back over the wire.
+            var points = await _client.SearchAsync(
+                _collection,
+                queryVector,
+                limit: (ulong)topK,
+                payloadSelector: true,
+                scoreThreshold: minScore,
+                cancellationToken: ct);
+
+            return Result<IReadOnlyList<RetrievedChunk>>.Success(
+                [.. points.Select(QdrantPayload.ToRetrievedChunk)]);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Vector search failed against collection {Collection}", _collection);
+
+            return Result<IReadOnlyList<RetrievedChunk>>.Failure(
+                $"VectorSearchFailed: {ex.Message}", "VectorSearchFailed");
+        }
     }
 
     /// <summary>

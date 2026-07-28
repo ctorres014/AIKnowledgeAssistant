@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Qdrant.Client;
 
 namespace AiKnowledgeAssistant.Infrastructure.DependencyInjection;
 
@@ -137,6 +138,10 @@ public static class IngestionRegistration
     private static void AddVectorStore(IHostApplicationBuilder builder)
     {
         builder.AddQdrantClient(QdrantResourceName);
+
+        // The Aspire integration registers the concrete client; the store takes the interface the
+        // package ships, which is what makes its search path unit-testable with a mock.
+        builder.Services.AddSingleton<IQdrantClient>(sp => sp.GetRequiredService<QdrantClient>());
 
         builder.Services.AddSingleton<IVectorStore, QdrantVectorStore>();
 

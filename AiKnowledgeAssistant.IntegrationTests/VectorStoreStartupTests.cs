@@ -120,5 +120,9 @@ public class VectorStoreStartupTests
 
         public Task<VectorStoreStats> GetStatsAsync(CancellationToken ct) =>
             Task.FromResult(new VectorStoreStats("knowledge", 0, 768));
+
+        public Task<Domain.Common.Result<IReadOnlyList<Domain.Rag.RetrievedChunk>>> SearchAsync(
+            float[] queryVector, int topK, float minScore, CancellationToken ct) =>
+            Task.FromResult(Domain.Common.Result<IReadOnlyList<Domain.Rag.RetrievedChunk>>.Success([]));
     }
 }

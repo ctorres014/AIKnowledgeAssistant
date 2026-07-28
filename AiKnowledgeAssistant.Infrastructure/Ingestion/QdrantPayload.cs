@@ -1,4 +1,5 @@
 using AiKnowledgeAssistant.Domain.Ingestion;
+using AiKnowledgeAssistant.Domain.Rag;
 using Qdrant.Client.Grpc;
 using static Qdrant.Client.Grpc.Conditions;
 
@@ -56,6 +57,34 @@ public static class QdrantPayload
 
         return point;
     }
+
+    /// <summary>
+    /// A scored search hit back into the domain. Five payload fields plus the score; the point ID and
+    /// <c>contentHash</c> are ingestion bookkeeping that a citation has no use for.
+    /// </summary>
+    public static RetrievedChunk ToRetrievedChunk(ScoredPoint point) => new(
+        ReadString(point.Payload, SourceIdField),
+        ReadSourceType(point.Payload),
+        ReadString(point.Payload, TitleField),
+        (int)ReadInteger(point.Payload, ChunkIndexField),
+        ReadString(point.Payload, TextField),
+        point.Score);
+
+    private static string ReadString(IDictionary<string, Value> payload, string field) =>
+        payload.TryGetValue(field, out var value) ? value.StringValue : string.Empty;
+
+    private static long ReadInteger(IDictionary<string, Value> payload, string field) =>
+        payload.TryGetValue(field, out var value) ? value.IntegerValue : 0;
+
+    /// <summary>
+    /// Ingestion writes this field from the enum itself, so an unparsable value means the collection
+    /// was written by something else. The citation degrades to <see cref="SourceType.Text"/> instead of
+    /// failing a query that is otherwise perfectly answerable.
+    /// </summary>
+    private static SourceType ReadSourceType(IDictionary<string, Value> payload) =>
+        Enum.TryParse<SourceType>(ReadString(payload, SourceTypeField), ignoreCase: true, out var parsed)
+            ? parsed
+            : SourceType.Text;
 
     /// <summary>Every chunk of one document — the delete filter used before reindexing.</summary>
     public static Filter BySourceId(string sourceId) => MatchKeyword(SourceIdField, sourceId);

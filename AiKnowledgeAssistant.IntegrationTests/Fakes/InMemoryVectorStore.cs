@@ -1,5 +1,7 @@
 using AiKnowledgeAssistant.Application.Abstractions;
+using AiKnowledgeAssistant.Domain.Common;
 using AiKnowledgeAssistant.Domain.Ingestion;
+using AiKnowledgeAssistant.Domain.Rag;
 
 namespace AiKnowledgeAssistant.IntegrationTests.Fakes;
 
@@ -17,6 +19,11 @@ public sealed class InMemoryVectorStore : IVectorStore
     public int Dimension => 768;
 
     public int EnsureCollectionCalls { get; private set; }
+
+    public int SearchCalls { get; private set; }
+
+    /// <summary>Set to fail every search, so the endpoint's <c>503 VectorSearchFailed</c> path is reachable.</summary>
+    public bool FailSearch { get; init; }
 
     public long VectorsCount
     {
@@ -107,4 +114,37 @@ public sealed class InMemoryVectorStore : IVectorStore
 
     public Task<VectorStoreStats> GetStatsAsync(CancellationToken ct) =>
         Task.FromResult(new VectorStoreStats(Collection, VectorsCount, Dimension));
+
+    /// <summary>Real cosine similarity over the stored vectors, filtered and truncated like Qdrant does.</summary>
+    public Task<Result<IReadOnlyList<RetrievedChunk>>> SearchAsync(
+        float[] queryVector, int topK, float minScore, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            SearchCalls++;
+
+            if (FailSearch)
+            {
+                return Task.FromResult(Result<IReadOnlyList<RetrievedChunk>>.Failure(
+                    "VectorSearchFailed: vector store unavailable.", "VectorSearchFailed"));
+            }
+
+            IReadOnlyList<RetrievedChunk> hits =
+            [
+                .. _points.Values
+                    .Select(p => new RetrievedChunk(
+                        p.Chunk.SourceId,
+                        p.Chunk.SourceType,
+                        p.Chunk.Title,
+                        p.Chunk.Index,
+                        p.Chunk.Text,
+                        VectorMath.CosineSimilarity(queryVector, p.Vector)))
+                    .Where(c => c.Score >= minScore)
+                    .OrderByDescending(c => c.Score)
+                    .Take(topK)
+            ];
+
+            return Task.FromResult(Result<IReadOnlyList<RetrievedChunk>>.Success(hits));
+        }
+    }
 }
