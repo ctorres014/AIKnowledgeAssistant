@@ -37,6 +37,12 @@ public sealed class InMemoryVectorStore : IVectorStore
     /// <summary>Set to fail every search, simulating a store outage during a query.</summary>
     public bool FailSearch { get; init; }
 
+    /// <summary>
+    /// Canned search hits, returned verbatim instead of scoring the stored points. Lets a test state
+    /// exactly what the store found — including nothing at all — without reverse-engineering vectors.
+    /// </summary>
+    public IReadOnlyList<RetrievedChunk>? SearchResults { get; init; }
+
     public IReadOnlyCollection<(DocumentChunk Chunk, float[] Vector)> Points => _points.Values;
 
     public long VectorsCount => _points.Count;
@@ -106,6 +112,11 @@ public sealed class InMemoryVectorStore : IVectorStore
         {
             return Task.FromResult(Result<IReadOnlyList<RetrievedChunk>>.Failure(
                 "VectorSearchFailed: vector store unavailable.", "VectorSearchFailed"));
+        }
+
+        if (SearchResults is not null)
+        {
+            return Task.FromResult(Result<IReadOnlyList<RetrievedChunk>>.Success(SearchResults));
         }
 
         IReadOnlyList<RetrievedChunk> hits =
