@@ -8,6 +8,10 @@ builder.AddServiceDefaults();
 // Ingestion pipeline (SPEC 02): document sources, chunker, Ollama embeddings, Qdrant vector store.
 builder.AddIngestion();
 
+// Query path (SPEC 03): Ollama chat client, grounded prompt, RAG pipeline, Knowledge Orchestrator.
+// After AddIngestion, whose embedding generator and vector store the pipeline reuses.
+builder.AddRag();
+
 // Add services to the container.
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

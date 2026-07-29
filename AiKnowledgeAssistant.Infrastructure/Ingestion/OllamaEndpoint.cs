@@ -17,15 +17,29 @@ public static class OllamaEndpoint
     /// <summary>Connection name of the embedding model resource in the app host.</summary>
     public const string ModelResourceName = "embedding";
 
+    /// <summary>Connection name of the chat (generation) model resource in the app host.</summary>
+    public const string ChatModelResourceName = "chat";
+
     /// <summary>Connection / service name of the Ollama server resource in the app host.</summary>
     public const string ResourceName = "ollama";
 
     private const string Fallback = "http://ollama";
 
-    public static Uri Resolve(IConfiguration configuration)
+    /// <summary>Base address for embeddings, preferring the <c>embedding</c> model resource.</summary>
+    public static Uri Resolve(IConfiguration configuration) =>
+        Resolve(configuration, ModelResourceName);
+
+    /// <summary>
+    /// Base address for one model resource. Both models are served by the same Ollama instance, so
+    /// this differs from <see cref="Resolve(IConfiguration)"/> only in which connection string wins
+    /// when the app host publishes one per model.
+    /// </summary>
+    public static Uri Resolve(IConfiguration configuration, string modelResourceName)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         var endpoint =
-            Parse(configuration.GetConnectionString(ModelResourceName)) ??
+            Parse(configuration.GetConnectionString(modelResourceName)) ??
             Parse(configuration.GetConnectionString(ResourceName)) ??
             Fallback;
 

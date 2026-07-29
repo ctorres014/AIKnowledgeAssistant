@@ -57,16 +57,19 @@ public class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    /// The endpoint is real since SPEC 03; a blank question is rejected before any dependency is
+    /// touched, which is why it is safe to assert here, where no LLM double is registered. The full
+    /// query surface is covered by the dedicated query endpoint tests.
+    /// </summary>
     [Fact]
-    public async Task Post_Query_Returns_501_NotImplemented()
+    public async Task Post_Query_With_A_Blank_Question_Returns_400()
     {
         var client = _factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync(
-            "/api/query",
-            new { question = "¿Qué es RAG?" });
+        var response = await client.PostAsJsonAsync("/api/query", new { question = "   " });
 
-        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

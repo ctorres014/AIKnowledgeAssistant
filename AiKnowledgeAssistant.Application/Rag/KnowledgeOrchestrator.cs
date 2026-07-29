@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AiKnowledgeAssistant.Domain.Common;
 using AiKnowledgeAssistant.Domain.Rag;
 using Microsoft.Extensions.Logging;
@@ -36,6 +37,11 @@ public sealed class KnowledgeOrchestrator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
 
+        // The root of the query trace: the use case starts here, so a cache hit in SPEC 04 will show
+        // up under the same span as the RAG path it replaces.
+        using var span = RagTelemetry.ActivitySource.StartActivity(RagTelemetry.QuerySpan);
+        var stopwatch = Stopwatch.StartNew();
+
         var cached = await TryGetCachedAnswerAsync(question, ct);
         if (cached is not null)
         {
@@ -43,16 +49,43 @@ public sealed class KnowledgeOrchestrator
         }
 
         var answer = await _pipeline.AnswerAsync(question, ct);
+
+        RagTelemetry.RecordStage(RagTelemetry.TotalStage, stopwatch.Elapsed);
+
         if (!answer.IsSuccess)
         {
             _logger.LogWarning("Query failed with {ErrorCode}: {Error}", answer.ErrorCode, answer.Error);
 
+            RagTelemetry.QueriesFailed.Add(1);
+            span?.SetTag("rag.error_code", answer.ErrorCode);
+            span?.SetStatus(ActivityStatusCode.Error, answer.Error);
+
             return answer;
         }
+
+        Record(span, answer.Value!);
 
         await PersistAsync(question, answer.Value!, ct);
 
         return answer;
+    }
+
+    /// <summary>Tags the query span with the outcome and counts it as answered or unanswered.</summary>
+    private static void Record(Activity? span, Answer answer)
+    {
+        span?.SetTag("rag.model", answer.Model);
+        span?.SetTag("rag.found_answer", answer.FoundAnswer);
+        span?.SetTag("rag.citations", answer.Citations.Count);
+        span?.SetTag("rag.duration_ms", answer.DurationMs);
+
+        if (answer.FoundAnswer)
+        {
+            RagTelemetry.QueriesAnswered.Add(1);
+        }
+        else
+        {
+            RagTelemetry.QueriesWithoutResults.Add(1);
+        }
     }
 
     /// <summary>

@@ -53,6 +53,42 @@ public class OllamaEndpointTests
     }
 
     [Fact]
+    public void Resolve_ForTheChatModel_PrefersTheChatResource()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:chat", "Endpoint=http://ollama-chat:11434;Model=llama3.2:3b"),
+            ("ConnectionStrings:embedding", "Endpoint=http://ollama-embed:11434;Model=nomic-embed-text"),
+            ("ConnectionStrings:ollama", "Endpoint=http://ollama-server:11434"));
+
+        Assert.Equal(
+            "http://ollama-chat:11434/",
+            OllamaEndpoint.Resolve(configuration, OllamaEndpoint.ChatModelResourceName).ToString());
+    }
+
+    /// <summary>Both models are served by the same instance, so the server resource still answers.</summary>
+    [Fact]
+    public void Resolve_ForTheChatModel_FallsBackToTheServerResource()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:embedding", "Endpoint=http://ollama-embed:11434"),
+            ("ConnectionStrings:ollama", "Endpoint=http://ollama-server:11434"));
+
+        Assert.Equal(
+            "http://ollama-server:11434/",
+            OllamaEndpoint.Resolve(configuration, OllamaEndpoint.ChatModelResourceName).ToString());
+    }
+
+    [Fact]
+    public void Resolve_ForEmbeddings_IgnoresTheChatResource()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:chat", "Endpoint=http://ollama-chat:11434"),
+            ("ConnectionStrings:embedding", "Endpoint=http://ollama-embed:11434"));
+
+        Assert.Equal("http://ollama-embed:11434/", OllamaEndpoint.Resolve(configuration).ToString());
+    }
+
+    [Fact]
     public void Resolve_IsCaseInsensitiveOnTheEndpointKey()
     {
         var configuration = Configuration(("ConnectionStrings:embedding", "endpoint=http://localhost:11434;model=x"));

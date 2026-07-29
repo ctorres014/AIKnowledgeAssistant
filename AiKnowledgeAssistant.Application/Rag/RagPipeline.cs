@@ -60,9 +60,7 @@ public sealed class RagPipeline
             return Result<Answer>.Failure(vector.Error!, vector.ErrorCode);
         }
 
-        var search = await _vectorStore.SearchAsync(
-            vector.Value!, _options.TopK, _options.MinScore, ct);
-
+        var search = await SearchAsync(vector.Value!, ct);
         if (!search.IsSuccess)
         {
             return Result<Answer>.Failure(search.Error!, search.ErrorCode);
@@ -80,7 +78,7 @@ public sealed class RagPipeline
                 new Answer(null, FoundAnswer: false, [], _llm.Model, stopwatch.ElapsedMilliseconds));
         }
 
-        var completion = await _llm.CompleteAsync(_promptBuilder.Build(question, chunks), ct);
+        var completion = await GenerateAsync(question, chunks, ct);
         if (!completion.IsSuccess)
         {
             return Result<Answer>.Failure(completion.Error!, completion.ErrorCode);
@@ -100,10 +98,16 @@ public sealed class RagPipeline
     /// </summary>
     private async Task<Result<float[]>> EmbedAsync(string question, CancellationToken ct)
     {
+        using var span = RagTelemetry.ActivitySource.StartActivity(RagTelemetry.EmbedSpan);
+        var stopwatch = Stopwatch.StartNew();
+
         var embedded = await _embeddings.GenerateAsync([question], ct);
+
+        RagTelemetry.RecordStage(RagTelemetry.EmbedStage, stopwatch.Elapsed);
 
         if (!embedded.IsSuccess)
         {
+            span?.SetStatus(ActivityStatusCode.Error, embedded.Error);
             return Result<float[]>.Failure(embedded.Error!, embedded.ErrorCode);
         }
 
@@ -111,11 +115,71 @@ public sealed class RagPipeline
 
         if (vectors.Count == 0)
         {
-            return Result<float[]>.Failure(
-                "EmbeddingRequestFailed: the provider returned no vector for the question.",
-                "EmbeddingRequestFailed");
+            const string error = "EmbeddingRequestFailed: the provider returned no vector for the question.";
+
+            span?.SetStatus(ActivityStatusCode.Error, error);
+            return Result<float[]>.Failure(error, "EmbeddingRequestFailed");
         }
 
         return Result<float[]>.Success(vectors[0]);
+    }
+
+    /// <summary>Retrieval, with the knobs that shaped it and what came back on the span.</summary>
+    private async Task<Result<IReadOnlyList<RetrievedChunk>>> SearchAsync(float[] vector, CancellationToken ct)
+    {
+        using var span = RagTelemetry.ActivitySource.StartActivity(RagTelemetry.SearchSpan);
+        span?.SetTag("rag.top_k", _options.TopK);
+        span?.SetTag("rag.min_score", _options.MinScore);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        var search = await _vectorStore.SearchAsync(vector, _options.TopK, _options.MinScore, ct);
+
+        RagTelemetry.RecordStage(RagTelemetry.SearchStage, stopwatch.Elapsed);
+
+        if (!search.IsSuccess)
+        {
+            span?.SetStatus(ActivityStatusCode.Error, search.Error);
+            return search;
+        }
+
+        var chunks = search.Value!;
+
+        span?.SetTag("rag.chunks_retrieved", chunks.Count);
+
+        // The best score is what tells a near miss from a question the corpus simply does not cover,
+        // and it is how MinScore gets tuned against a real corpus.
+        if (chunks.Count > 0)
+        {
+            span?.SetTag("rag.max_score", chunks.Max(c => c.Score));
+        }
+
+        return search;
+    }
+
+    private async Task<Result<LlmCompletion>> GenerateAsync(
+        string question, IReadOnlyList<RetrievedChunk> chunks, CancellationToken ct)
+    {
+        using var span = RagTelemetry.ActivitySource.StartActivity(RagTelemetry.GenerateSpan);
+        span?.SetTag("rag.model", _llm.Model);
+        span?.SetTag("rag.chunks_retrieved", chunks.Count);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        var completion = await _llm.CompleteAsync(_promptBuilder.Build(question, chunks), ct);
+
+        RagTelemetry.RecordStage(RagTelemetry.GenerateStage, stopwatch.Elapsed);
+
+        if (!completion.IsSuccess)
+        {
+            span?.SetStatus(ActivityStatusCode.Error, completion.Error);
+            return completion;
+        }
+
+        var generated = completion.Value!;
+        span?.SetTag("rag.prompt_tokens", generated.PromptTokens);
+        span?.SetTag("rag.completion_tokens", generated.CompletionTokens);
+
+        return completion;
     }
 }
