@@ -297,71 +297,71 @@ Response 504: { "error": "LlmTimeout" }
 
 **Compilación y capas**
 
-- [ ] `dotnet build AiKnowledgeAssistant.sln` compila sin errores ni warnings de versión de paquete.
-- [ ] `Domain` sigue sin referenciar ningún otro proyecto de la solución.
-- [ ] `Application` referencia únicamente `Domain`: `OllamaLlmClient` y el cliente de Qdrant
+- [x] `dotnet build AiKnowledgeAssistant.sln` compila sin errores ni warnings de versión de paquete.
+- [x] `Domain` sigue sin referenciar ningún otro proyecto de la solución.
+- [x] `Application` referencia únicamente `Domain`: `OllamaLlmClient` y el cliente de Qdrant
       viven solo en `Infrastructure`.
-- [ ] `dotnet test` pasa completo **sin un runtime de contenedores activo**.
-- [ ] Ningún `.csproj` fija versiones de paquete inline.
+- [x] `dotnet test` pasa completo **sin un runtime de contenedores activo**.
+- [x] Ningún `.csproj` fija versiones de paquete inline.
 
 **Retrieval**
 
-- [ ] `QdrantVectorStore.SearchAsync` mapea los 5 campos de payload (`sourceId`, `sourceType`,
+- [x] `QdrantVectorStore.SearchAsync` mapea los 5 campos de payload (`sourceId`, `sourceType`,
       `title`, `chunkIndex`, `text`) más el score a `RetrievedChunk`.
-- [ ] `SearchAsync` con `topK: 5` nunca devuelve más de 5 elementos.
-- [ ] `SearchAsync` no devuelve ningún chunk con `Score < MinScore`.
-- [ ] Un error del cliente de Qdrant devuelve `Result.Failure("VectorSearchFailed")` y **no**
+- [x] `SearchAsync` con `topK: 5` nunca devuelve más de 5 elementos.
+- [x] `SearchAsync` no devuelve ningún chunk con `Score < MinScore`.
+- [x] Un error del cliente de Qdrant devuelve `Result.Failure("VectorSearchFailed")` y **no**
       lanza excepción.
 
 **Prompt y fundamentación**
 
-- [ ] El prompt generado por `GroundedPromptBuilder` contiene el texto íntegro de los N chunks
+- [x] El prompt generado por `GroundedPromptBuilder` contiene el texto íntegro de los N chunks
       recuperados, cada uno con su `title` y su `chunkIndex`, en el mismo orden que la búsqueda.
-- [ ] El bloque de sistema incluye las tres reglas: responder solo con el contexto, admitir
+- [x] El bloque de sistema incluye las tres reglas: responder solo con el contexto, admitir
       explícitamente cuando el contexto no alcanza, y responder en el idioma de la pregunta.
 
 **Cliente LLM**
 
-- [ ] `OllamaLlmClient` con `HttpMessageHandler` mockeado devuelve el texto de una respuesta OK.
-- [ ] Un `500` HTTP del proveedor devuelve `Result.Failure("LlmUnavailable")` sin lanzar excepción.
-- [ ] Un handler que tarda más que `Rag:TimeoutSeconds` devuelve `Result.Failure("LlmTimeout")`
+- [x] `OllamaLlmClient` con `HttpMessageHandler` mockeado devuelve el texto de una respuesta OK.
+- [x] Un `500` HTTP del proveedor devuelve `Result.Failure("LlmUnavailable")` sin lanzar excepción.
+- [x] Un handler que tarda más que `Rag:TimeoutSeconds` devuelve `Result.Failure("LlmTimeout")`
       sin lanzar excepción.
 
 **Pipeline y orquestador**
 
-- [ ] Cuando ningún chunk supera `MinScore`, el `ILlmClient` **no recibe ninguna llamada** y el
+- [x] Cuando ningún chunk supera `MinScore`, el `ILlmClient` **no recibe ninguna llamada** y el
       resultado es `FoundAnswer: false`, `Text: null`, `Citations: []`.
-- [ ] Con chunks por encima del umbral, `Answer.Citations` tiene exactamente tantos elementos
+- [x] Con chunks por encima del umbral, `Answer.Citations` tiene exactamente tantos elementos
       como chunks devolvió la búsqueda.
-- [ ] Un fallo del `IEmbeddingGenerator` al embeber la pregunta se propaga como
+- [x] Un fallo del `IEmbeddingGenerator` al embeber la pregunta se propaga como
       `Result.Failure("EmbeddingRequestFailed")` y no llega a consultar Qdrant.
-- [ ] `QueryController` depende de `KnowledgeOrchestrator` y **no** de `RagPipeline`.
-- [ ] `Answer.Model` refleja el valor de `Rag:Model` configurado, también en el camino sin resultados.
+- [x] `QueryController` depende de `KnowledgeOrchestrator` y **no** de `RagPipeline`.
+- [x] `Answer.Model` refleja el valor de `Rag:Model` configurado, también en el camino sin resultados.
 
 **Endpoint**
 
-- [ ] `POST /api/query` con índice poblado y pregunta pertinente devuelve `200` con
+- [x] `POST /api/query` con índice poblado y pregunta pertinente devuelve `200` con
       `foundAnswer: true`, `answer` no vacío y `citations` con al menos un elemento.
-- [ ] Cada citación trae `title`, `sourceId`, `sourceType`, `chunkIndex` y `score`, y **no** trae
+- [x] Cada citación trae `title`, `sourceId`, `sourceType`, `chunkIndex` y `score`, y **no** trae
       `text` cuando `includeChunks` se omite o es `false`.
-- [ ] La misma consulta con `includeChunks: true` devuelve las citaciones **con** su `text`.
-- [ ] `POST /api/query` sin coincidencias por encima del umbral devuelve `200` con
+- [x] La misma consulta con `includeChunks: true` devuelve las citaciones **con** su `text`.
+- [x] `POST /api/query` sin coincidencias por encima del umbral devuelve `200` con
       `foundAnswer: false`, `answer: null` y `citations: []`.
-- [ ] `POST /api/query` con `question` vacía, en blanco o ausente devuelve `400`.
-- [ ] Con un `ILlmClient` que falla con `LlmUnavailable`, la respuesta es `503` con
+- [x] `POST /api/query` con `question` vacía, en blanco o ausente devuelve `400`.
+- [x] Con un `ILlmClient` que falla con `LlmUnavailable`, la respuesta es `503` con
       `{ "error": "LlmUnavailable" }`.
-- [ ] Con un `ILlmClient` que agota el timeout, la respuesta es `504` con
+- [x] Con un `ILlmClient` que agota el timeout, la respuesta es `504` con
       `{ "error": "LlmTimeout" }`.
-- [ ] Con un `IVectorStore` que falla, la respuesta es `503` con `{ "error": "VectorSearchFailed" }`.
-- [ ] `POST /api/ingest` y `GET /api/ingest/stats` siguen comportándose igual que en SPEC 02
+- [x] Con un `IVectorStore` que falla, la respuesta es `503` con `{ "error": "VectorSearchFailed" }`.
+- [x] `POST /api/ingest` y `GET /api/ingest/stats` siguen comportándose igual que en SPEC 02
       (la suite de integración de ingesta pasa sin cambios funcionales).
 
 **Documentación**
 
-- [ ] `README.md` documenta `POST /api/query` con sus respuestas `200`/`400`/`503`/`504`, la
+- [x] `README.md` documenta `POST /api/query` con sus respuestas `200`/`400`/`503`/`504`, la
       sección `Rag` de configuración, y la tabla **modelo de desarrollo (CPU, `llama3.2:3b`) vs.
       modelo objetivo (GPU, `qwen2.5:7b`)** con la razón de latencia.
-- [ ] `CLAUDE.md` refleja SPEC 03 como implementado, los tipos nuevos por capa, la sección `Rag`
+- [x] `CLAUDE.md` refleja SPEC 03 como implementado, los tipos nuevos por capa, la sección `Rag`
       y el aviso de que `SearchAsync` amplía el contrato de SPEC 02.
 
 **Verificación manual (requiere AppHost con Qdrant y Ollama reales)**
